@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Notes:
 # -> Add decimal and binary base functionality
 ##############################################################################################################
@@ -6,6 +7,8 @@ import sys
 import argparse
 import table
 import instructions
+import binascii
+import os
 
 ##############################################################################################################
 # Support Classes
@@ -73,7 +76,6 @@ def read(name):
     
     for lineNumber, line in enumerate(file, start = 1):
         line = line.strip()
-        line = line.upper()
         if(line):
             block = []
             rest = []
@@ -108,9 +110,16 @@ def error(message, line):
 
 def output(code, name, args):
     # Format: [line] [lineNumStr] [address] [label] [instruction + argument] [hex code] [comment]
-    f = open(name,'w') if name else sys.stdout
+    if args.bin:
+        f = open(name,'wb') if name else sys.stdout
+    else:
+        f = open(name,'w') if name else sys.stdout
 
-    width = 0;
+    width = 0
+    bin = bytes()
+    if args.bin:
+        width = 1
+    
     if args.lineNum:
         print('{:<20}'.format("Line number"),file=f,end='')
         width += 20
@@ -130,14 +139,17 @@ def output(code, name, args):
         print('{:<20}'.format("Comment"),file=f,end='')
         width += 20
 
-    if width:
-        print(file=f)
-
+    if not args.bin:
+        print("",file=f)
+    
     for i in range(0,width):
-        print("-",file=f,end='')
+        if not args.bin:
+            print("-",file=f,end='')
+
+    if not args.bin:
+        print("",file=f)
 
     if width:
-        print(file=f)
         for l in code.data:
             if args.lineNum:
                 print('{:<20}'.format(l[1]),file=f,end='')
@@ -149,13 +161,42 @@ def output(code, name, args):
                 print('{:<20}'.format(l[4]),file=f,end='')
             if args.hex:
                 print('{:<20}'.format(l[5]),file=f,end='')
+            if args.bin:
+               bin += binascii.unhexlify(l[5].split('x')[1])
             if args.comment:
                 print('{:<20}'.format(l[6]),file=f,end='')
-            print(file=f)
+            if not args.bin:
+                print("",file=f)
+
+        if args.bin:
+            f.write(bin)
 
     if f is not sys.stdout:
         f.close()
 
+def output_basic(code, name, args):
+    # Format: [line] [lineNumStr] [address] [label] [instruction + argument] [hex code] [comment]
+    f = open(name,'w') if name else sys.stdout
+    if name:
+        simName = os.path.basename(name).split('.')[0]
+    else:
+        simName = 'default'
+    address = code.data[0][2]
+    length = 0
+    decimalStr = ''
+    for l in code.data:
+                length += 1
+                decimalStr += f"{int(l[5],16)}, "
+    decimalStr += "0, 0"
+    print("0 'LENGTH Machine Code Installer", file=f)
+    print("1 'Artifact generator", file=f,end='')
+    print("2 CLS:PRINT:PRINTTAB(5)\"Loading Machine Code File\"", file=f)
+    print(f"3 FORN={int(address,16)}TO{int(address, 16)+length}:READA:POKEN,A:CK=CK+A:NEXT:READA", file=f)
+    print("4 PRINTTAB(3)\"Machine Code file has been saved\":PRINTTAB(8)\"This file can be killed\":PRINTTAB(5)\"Does not need Himem protection\"", file=f)
+    print(f"5 SAVEM\"{simName}.CO\",{int(address,16)},{int(address,16)+length},{int(address,16)} :DATA{decimalStr}", file=f)
+
+    if f is not sys.stdout:
+        f.close()
 ##############################################################################################################
 # Directive functions
 def org(arg, symbols, code, line):
@@ -192,7 +233,26 @@ def db(args, symbols, code, line):
                 error("Expression too large! Must evaluate to an 8-bit number!", line)
                 return 0
             else:
-                code.write(num,line,instrct="DB")
+                code.write(num,line,instrct="db")
+        else:
+            error("Expression depends on unresolved symbol!",line)
+            return 0
+    return 1
+
+def dm(args, symbols, code, line):
+    for expr in args:
+        val = evaluate(expr, symbols, code.address)
+        if(val[0] in {'<08str>'}):
+            val_string = val[1].replace("\"","")
+            for num in map(ord, val_string):
+                if(num < 0):
+                    error("Expression must be positive!",line)
+                    return 0
+                elif(num > 255):
+                    error("Expression too large! Must evaluate to an 8-bit number!", line)
+                    return 0
+                else:
+                    code.write(num,line,instrct="dm")
         else:
             error("Expression depends on unresolved symbol!",line)
             return 0
@@ -251,10 +311,11 @@ directives = {
     #Format:
     # [function, min_args, max_args, name]
     # -1 means no bound
-    "ORG": [org, 1, 1, "ORG"],
-    "DB":  [db, 1, -1, "DB"],
-    "EQU": [equ, 2, 2, "EQU"],
-    "DS":  [ds, 1, 1, "DS"],
+    "org": [org, 1, 1, "org"],
+    "db":  [db, 1, -1, "db"],
+    "equ": [equ, 2, 2, "equ"],
+    "ds":  [ds, 1, 1, "ds"],
+    "dm":  [dm, 1, 1, "dm"],
 }
      
 def secondPass(symbols, code):
@@ -296,13 +357,31 @@ def secondPass(symbols, code):
 
 def lexer(lines):
     tokens = []
+    buildString = False
+    buildedString = ""
     code_lines = [x for x in lines if len(x[1])]
     for line in code_lines:
         tl = []
-        for word in line[1]:
-            word = word.strip()
+        for wordstr in line[1]:
+            word = wordstr.strip()
             if word in table.mnm_0:
                 tl.append(["<mnm_0>", word])
+            elif('"' in wordstr and buildString):
+                buildString = False
+                buildedString +=wordstr
+                buildedString += '\0'
+                tl.append(["<08str>", buildedString])
+                buildedString = ""
+                continue
+            elif(buildString):
+                buildedString += wordstr
+                continue
+            elif(re.match(r'^\"', word)):
+                buildString = True
+                buildedString = wordstr
+                continue
+            elif(re.match(r'^\'', word)):
+                tl.append(["<08ch>", word])
             elif(re.match(r'^(0[Xx])?[0-9A-Fa-f]{2}$', word)):
                 tl.append(["<08nm>", word])
             elif word in table.mnm_0_e:
@@ -360,6 +439,9 @@ def evaluate(expr, symbols, address):
         ###################################
         if(expr[-1][0] in {"<08nm>", "<16nm>", "<numb>"}):
             result += sign*int(expr[-1][1], base=16)
+            expr = expr[:-pop]
+        elif(expr[-1][0] in {"<08ch>"}):
+            result += ord(expr[-1][1].replace("'",""))
             expr = expr[:-pop]
         elif(expr[-1][0] == "<lc>"):
             result += sign*(address)
@@ -433,7 +515,7 @@ def parse_expr(tokens, symbols, code, line):
         if(len(data) > 1 and (not tokens)):
             error("Expression missing number/symbol!",line)
             return er
-        if(tokens[0][0] not in {"<08nm>", "<16nm>", "<symbol>", "<lc>"}):
+        if(tokens[0][0] not in {"<08str>", "<08ch>", "<08nm>", "<16nm>", "<symbol>", "<lc>"}):
             if(tokens[0][0] not in {"<plus>", "<minus>"}):
                 if(len(data) > 1):
                     error("Expression has bad identifier!",line)
@@ -443,7 +525,8 @@ def parse_expr(tokens, symbols, code, line):
             else:
                 error("Expression has extra operator!",line)
                 return er
-        data.append(tokens.pop(0))
+        tok = tokens.pop(0)
+        data.append(tok)
     return data
 ######################################################################################
 def parse_lbl_def(tokens, symbols, code, line):
@@ -488,7 +571,7 @@ def parse_drct(tokens, symbols, code, line):
             return er
         expr = parse_expr(*args)
         if(not expr):
-            error("Directive has bad argument!", line)
+            error("Directive has bad argument A!", line)
             return er
         if(expr == er):
             return er
@@ -503,7 +586,7 @@ def parse_drct(tokens, symbols, code, line):
     elif(tokens[0][0] in {"<drct_p>", "<08nm>"}):
         drct_p = tokens[0][1]
         if(tokens[0][0] == "<08nm>"):
-            if(tokens[0][1] != "DB"):
+            if(tokens[0][1] != "db"):
                 return 0
             tokens[0][0] = "<drct_p>"
         data.append(tokens.pop(0))
@@ -513,7 +596,7 @@ def parse_drct(tokens, symbols, code, line):
             return er
         expr = parse_expr(*args)
         if(not expr):
-            error("Directive has bad argument!",line)
+            error("Directive has bad argument B!",line)
             return er
         elif(expr == er):
             return er
@@ -529,7 +612,7 @@ def parse_drct(tokens, symbols, code, line):
                 return er
             expr = parse_expr(*args)
             if(not expr):
-                error("Directive has bad argument!",line)
+                error("Directive has bad argument C !",line)
                 return er
             elif(expr == error):
                 return er
@@ -553,7 +636,7 @@ def parse_drct(tokens, symbols, code, line):
             return er
         expr = parse_expr(*args)
         if(not expr):
-            error("Directive has bad argument!",line)
+            error("Directive has bad argument D !",line)
             return er
         elif(expr == er):
             return er
@@ -830,11 +913,16 @@ p.add_argument("-I", "--instruction", help="include the instructions and argumen
 p.add_argument("-H", "--hex", help="include the hex code in output", action="store_true")
 p.add_argument("-C", "--comment", help="include the comments in output", action="store_true")
 p.add_argument("-s", "--standard", help="equivalent to -A -B -I -H -C", action="store_true")
+p.add_argument("-b", "--bin", help="outputs only binary data", action="store_true")
+p.add_argument("-t", "--trs100", help="creates basic loader for TRS-80 Model 100", action="store_true")
 p.add_argument("-o", "--out", help="output file name (stdout, if not specified)")
 args = p.parse_args();
 
 if(args.standard and (args.address or args.label or args.instruction and args.hex and args.comment)):
     p.error("-s is mutually exclusive with (-A, -B, -I, -H, -C")
+
+if(args.bin and not args.out):
+    p.error("-b needs a file to output to")
 
 if(args.source):
     outFile = args.source
@@ -843,4 +931,7 @@ if(args.standard):
     args.address, args.label, args.instruction, args.hex, args.comment = True, True, True, True, True
 
 parse(read(args.source),symbols,code)
-output(code, (args.out if args.out else ""), args)
+if args.trs100:
+    output_basic(code, (args.out if args.out else ""), args)
+else:
+    output(code, (args.out if args.out else ""), args)

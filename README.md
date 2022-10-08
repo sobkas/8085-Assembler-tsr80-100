@@ -2,24 +2,16 @@
 
 A simple Python based 8085 assembler.
 
-## Quickstart
-To clone this repository and assemble the demo file, open a terminal and run:
-```bash
-git clone https://github.com/ept221/8085-Assembler.git
-cd 8085-Assembler/src/
-python3 assembler.py demo.asm -s
-```
-
 ## Usage
 ```
-usage: assembler.py [-h] [-L] [-A] [-B] [-I] [-H] [-C] [-s] [-o OUT] source
+usage: assembler.py [-h] [-L] [-A] [-B] [-I] [-H] [-C] [-s] [-b] [-t] [-o OUT] source
 
 A simple 8085 assembler.
 
 positional arguments:
   source             source file
 
-optional arguments:
+options:
   -h, --help         show this help message and exit
   -L, --lineNum      include the line number in output
   -A, --address      include the address in output
@@ -28,32 +20,35 @@ optional arguments:
   -H, --hex          include the hex code in output
   -C, --comment      include the comments in output
   -s, --standard     equivalent to -A -B -I -H -C
+  -b, --bin          outputs only binary data
+  -t, --trs100       creates basic loader for TRS-80 Model 100
   -o OUT, --out OUT  output file name (stdout, if not specified)
   ```
 ## Source File Syntax
-The assembler is case insensitive.
+The assembler is case sensitive.
 
 ### Comments
 Comments begin with semicolons.
 ```asm
-MVI A, 0x5C ; This is a comment
+mvi A, 0x5C ; This is a comment
 ```
 
 ### Constants
 8 and 16-bit constants are given in hex. 8-bit constants must have two digits, and 16-bit constants must have 4-digits.
 ```asm
-MVI A, 0x0C
-MVI A, 0C   ; The "0x" is optional
-MVI A, 7    ; Illegal. 8-bit constants must have two digits
+mvi A, 0x0C
+mvi A, 0C   ; The "0x" is optional
+mvi A, 'a'  ; letters can be used as input, usage is ascii
+mvi A, 7    ; Illegal. 8-bit constants must have two digits
 
-LXI H, 0x03B7
-LXI H, 03B7    ; The "0x" is optional
-LXI H, 3B7     ; Illegal. 16-bit constants must have four digits
+lxi H, 0x03B7
+lxi H, 03B7    ; The "0x" is optional
+lxi H, 3B7     ; Illegal. 16-bit constants must have four digits
 ```
 If an 8-bit constant is given where a 16-bit constant is expected, the 8-bit constant will be converted to a 16-bit constant, with the upper 8-bits all zero.
 ```asm
-JNZ 0x3FC7  ; Jump-not-zero to 0x3FC7
-JMP FF      ; JMP takes a 16-bit argument, but given 8-bits. Will JMP to 0x00FF
+jnz 0x3FC7  ; Jump-not-zero to 0x3FC7
+jmp FF      ; JMP takes a 16-bit argument, but given 8-bits. Will JMP to 0x00FF
 ```
 
 ### Label Definitions
@@ -62,51 +57,51 @@ Label definitions may be any string ending with a colon, where the string does n
 ```asm
   ; Example
   ;*******************************************************************************
-        MVI A, 0x5C
-  Foo:  DCR A         ; Label definition
-        JNZ Foo       ; Jump-not-zero to Foo
+        mvi A, 0x5C
+  Foo:  dcr A         ; Label definition
+        jnz Foo       ; Jump-not-zero to Foo
   ;*******************************************************************************
-        MVI A, 0x5C
-  FD:   DCR A         ; Illegal. Label definition cannot match hex constant format
-        JNZ FD
+        mvi A, 0x5C
+  FD:   dcr A         ; Illegal. Label definition cannot match hex constant format
+        jnz FD
 ```
 ### Directives
-#### ORG <16-bit-address>
+#### org <16-bit-address>
 Sets the origin to the given address. Only forward movement of the origin is permitted.
 ```asm
 ; Example
 ;*******************************************************************************
-        MVI A, 55
-        OUT 42
-        JMP Start
- Start: ORG 0x44
-        MVI A, 32
-        OUT 42
+        mvi A, 55
+        out 42
+        jmp Start
+ Start: org 0x44
+        mvi A, 32
+        out 42
 ;*******************************************************************************
 ; Assembles to the following:
 
 Address             Label               Instruction         Hex Code            
 --------------------------------------------------------------------------------
-0x0000                                  MVI A, 55           0x3E                
+0x0000                                  mvi A, 55           0x3E                
 0x0001                                                      0x55                
-0x0002                                  OUT 42              0xD3                
+0x0002                                  out 42              0xD3                
 0x0003                                                      0x42                
-0x0004                                  JMP START           0xC3                
+0x0004                                  jmp START           0xC3                
 0x0005                                                      0x44                
 0x0006                                                      0x00                
-0x0044              START:              MVI A, 32           0x3E                
+0x0044              START:              mvi A, 32           0x3E                
 0x0045                                                      0x32                
-0x0046                                  OUT 42              0xD3                
+0x0046                                  out 42              0xD3                
 0x0047                                                      0x42  
 ```
 ```asm
 ; Example
 ;*******************************************************************************
-      ORG 0x44
-      MVI A, C7
-      OUT 44
-      ORG 0x00      ; Illegal. Cannot move origin backwards
-      JMP 0x0044
+      org 0x44
+      mvi A, C7
+      out 44
+      org 0x00      ; Illegal. Cannot move origin backwards
+      jmp 0x0044
 ```
 
 #### DB <8-bit-data>, ...
@@ -114,37 +109,62 @@ Writes one or more data bytes sequentially into memory.
 ```asm
 ; Example
 ;***********************************************************
-      MVI A, 33
-      DB     0x44, 0xFE, 0x9C
-      HLT
+      mvi A, 33
+      db     0x44, 0xFE, 0x9C
+      hlt
 ;***********************************************************
 ; Assembles to the following:
 
 Address             Instruction         Hex Code            
 ------------------------------------------------------------
-0x0000              MVI A, 33           0x3E                
+0x0000              mvi A, 33           0x3E                
 0x0001                                  0x33                
-0x0002              DB                  0x44                
-0x0003              DB                  0xFE                
-0x0004              DB                  0x9C                
-0x0005              HLT                 0x76  
+0x0002              db                  0x44                
+0x0003              db                  0xFE                
+0x0004              db                  0x9C                
+0x0005              hlt                 0x76  
 ```
+
+#### DM "<8char><8char>...
+Writes one or more char bytes sequentially into memory. Adds 0x00 at the end.
+```asm
+; Example
+;***********************************************************
+      mvi A, 33
+      dm     "Hello"
+      hlt
+;***********************************************************
+; Assembles to the following:
+
+Address             Instruction         Hex Code            
+------------------------------------------------------------
+0x0000              mvi A, 33           0x3E                
+0x0001                                  0x33                
+0x0002              dm                  0x48                
+0x0003              dm                  0x65                
+0x0004              dm                  0x6C                
+0x0005              dm                  0x6C                
+0x0006              dm                  0x6F                
+0x0007              dm                  0x00                
+0x0008              hlt                 0x76                
+```
+
 #### \<symbol> EQU <8 or 16-bit number>
 Equates a symbol with a number.
 ```asm
 ; Example
 ;***********************************************************
-      foo EQU 0xC5F3
-      MVI A,  33
-      LXI H,  foo
+      foo equ 0xC5F3
+      mvi A,  33
+      lxi H,  foo
 ;***********************************************************
 ; Assembles to the following:
 
 Address             Instruction         Hex Code            
 ------------------------------------------------------------
-0x0000              MVI A, 33           0x3E                
+0x0000              mvi A, 33           0x3E                
 0x0001                                  0x33                
-0x0002              LXI H, FOO          0x21                
+0x0002              lxi H, FOO          0x21                
 0x0003                                  0xF3                
 0x0004                                  0xC5      
 ```
@@ -153,22 +173,22 @@ Defines and reserves the next n-bytes for storage.
 ```asm
 ; Example
 ;*******************************************************************************
-            JMP END 
-Storage:    DS  0x05
-            LDA Storage
-END:        OUT 42
+            jmp END 
+Storage:    ds  0x05
+            lda Storage
+END:        out 42
 ;*******************************************************************************
 ; Assembles to the following:
 
 Address             Label               Instruction         Hex Code            
 --------------------------------------------------------------------------------
-0x0000                                  JMP END             0xC3                
+0x0000                                  jmp END             0xC3                
 0x0001                                                      0x0B                
 0x0002                                                      0x00                
-0x0008              STORAGE:            LDA STORAGE         0x3A                
+0x0008              STORAGE:            lda STORAGE         0x3A                
 0x0009                                                      0x03                
 0x000A                                                      0x00                
-0x000B              END:                OUT 42              0xD3                
+0x000B              END:                out 42              0xD3                
 0x000C                                                      0x42              
 ```
 
@@ -177,51 +197,51 @@ Anytime an instruction or directive requires a numerical argument, an expression
 ```asm
 ; Example with expression resolution in one pass.
 ;***********************************************************
-      foo    EQU   10
-      MVI A, foo - 04
+      foo    equ   10
+      mvi A, foo - 04
 ;***********************************************************
 ; Assembles to the following:
 
 Address             Instruction         Hex Code            
 ------------------------------------------------------------
-0x0000              MVI A, FOO - 04     0x3E                
+0x0000              mvi A, FOO - 04     0x3E                
 0x0001                                  0x0C     
 
 ```
 ```asm
 ; Example with expression resolution in two passes.
 ;***********************************************************
-      MVI A, foo + 04
-      foo    EQU   30
+      mvi A, foo + 04
+      foo    equ   30
 ;***********************************************************
 ; Assembles to the following:
 
 Address             Instruction         Hex Code            
 ------------------------------------------------------------
-0x0000              MVI A, FOO + 04     0x3E                
+0x0000              mvi A, FOO + 04     0x3E                
 0x0001                                  0x34
 ```
 ```asm
 ; Example with expression resolution in two passes, and $
 ;***********************************************************
-      MVI A,  55
-      JMP $ + foo
+      mvi A,  55
+      jmp $ + foo
       foo equ 05
-      DB  $,  $ + 01, $ + foo
-      DS  02
-      HLT
+      db  $,  $ + 01, $ + foo
+      ds  02
+      hlt
 ;***********************************************************
 ; Assembles to the following:
 
 Address             Instruction         Hex Code            
 ------------------------------------------------------------
-0x0000              MVI A, 55           0x3E                
+0x0000              mvi A, 55           0x3E                
 0x0001                                  0x55                
-0x0002              JMP $ + FOO         0xC3                
+0x0002              jmp $ + FOO         0xC3                
 0x0003                                  0x07                
 0x0004                                  0x00                
-0x0005              DB                  0x05                
-0x0006              DB                  0x07                
-0x0007              DB                  0x0C                
-0x000A              HLT                 0x76    
+0x0005              db                  0x05                
+0x0006              db                  0x07                
+0x0007              db                  0x0C                
+0x000A              hlt                 0x76    
 ```
