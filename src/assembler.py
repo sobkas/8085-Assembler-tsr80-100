@@ -98,7 +98,7 @@ def read(name):
             block.append(comment)
             lines.append(block)
             pc += 1
-            
+
     file.close()
     return lines
 
@@ -197,6 +197,21 @@ def output_basic(code, name, args):
 
     if f is not sys.stdout:
         f.close()
+
+class myord:
+    control = 0
+    def ord(self, ch):
+        if ch == '\\':
+            self.control += 1
+        elif self.control == 2:
+            self.control = 0
+            return [0x5C, ord(ch)]
+        elif self.control == 1:
+            self.control = 0
+            return [table.controlchars['\\'+ch]]
+        else:
+            return [ord(ch)]
+
 ##############################################################################################################
 # Directive functions
 def org(arg, symbols, code, line):
@@ -240,19 +255,25 @@ def db(args, symbols, code, line):
     return 1
 
 def dm(args, symbols, code, line):
+    ords = myord()
+
     for expr in args:
         val = evaluate(expr, symbols, code.address)
         if(val[0] in {'<08str>'}):
             val_string = val[1].replace("\"","")
-            for num in map(ord, val_string):
-                if(num < 0):
-                    error("Expression must be positive!",line)
-                    return 0
-                elif(num > 255):
-                    error("Expression too large! Must evaluate to an 8-bit number!", line)
-                    return 0
+            for num in map(ords.ord, val_string):
+                if num != None:
+                    for i in num:
+                        if i > 255:
+                            error("Expression too large! Must evaluate to an 8-bit number!", line)
+                            return 0
+                        elif i < 0:
+                            error("Expression must be positive!",line)
+                            return 0
+                        else:
+                            code.write(i, line,instrct="dm")
                 else:
-                    code.write(num,line,instrct="dm")
+                    pass
         else:
             error("Expression depends on unresolved symbol!",line)
             return 0
@@ -369,7 +390,6 @@ def lexer(lines):
             elif('"' in wordstr and buildString):
                 buildString = False
                 buildedString +=wordstr
-                buildedString += '\0'
                 tl.append(["<08str>", buildedString])
                 buildedString = ""
                 continue
@@ -441,7 +461,11 @@ def evaluate(expr, symbols, address):
             result += sign*int(expr[-1][1], base=16)
             expr = expr[:-pop]
         elif(expr[-1][0] in {"<08ch>"}):
-            result += ord(expr[-1][1].replace("'",""))
+            chars = expr[-1][1].replace("'","")
+            if len(chars) == 1:
+                result += ord(chars)
+            if len(chars) == 2:
+                result += table.controlchars[chars]
             expr = expr[:-pop]
         elif(expr[-1][0] == "<lc>"):
             result += sign*(address)

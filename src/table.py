@@ -138,6 +138,16 @@ reg = {
     '7'
 }
 
+controlchars = { "\\n": 0x0A,
+                 "\\a": 0x07,
+                 "\\b": 0x08,
+                 "\\v": 0x0B,
+                 "\\t": 0x09,
+                 "\\r": 0x0D,
+                 "\\f": 0x0C,
+                 "\\0": 0x00
+}
+
 reserved_mnm_0_e = {key for key in mnm_0_e}
 reserved_mnm_1_e = {key for key in mnm_1_e}
 reserved =  bin_op | uni_op | mnm_0 | reserved_mnm_0_e | mnm_1 | reserved_mnm_1_e | mnm_2 | drct_1 | drct_p | drct_w | reg 

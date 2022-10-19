@@ -126,12 +126,13 @@ Address             Instruction         Hex Code
 ```
 
 #### DM "<8char><8char>...
-Writes one or more char bytes sequentially into memory. Adds 0x00 at the end.
+Writes one or more char bytes sequentially into memory. At the end 0x00 can be added with \0.
+Some of the ASCIIZ control charactgers are supported.
 ```asm
 ; Example
 ;***********************************************************
       mvi A, 33
-      dm     "Hello"
+      dm "Hello\0"
       hlt
 ;***********************************************************
 ; Assembles to the following:
