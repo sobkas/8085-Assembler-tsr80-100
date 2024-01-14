@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # Notes:
 # -> Add decimal and binary base functionality
 ##############################################################################################################
@@ -180,20 +180,34 @@ def output_basic(code, name, args):
     if name:
         simName = os.path.basename(name).split('.')[0]
     else:
-        simName = 'default'
+        simName = 'deflt'
+
     address = code.data[0][2]
-    length = 0
-    decimalStr = ''
-    for l in code.data:
-                length += 1
-                decimalStr += f"{int(l[5],16)}, "
-    decimalStr += "0, 0"
-    print("0 'LENGTH Machine Code Installer", file=f)
-    print("1 'Artifact generator", file=f,end='')
-    print("2 CLS:PRINT:PRINTTAB(5)\"Loading Machine Code File\"", file=f)
-    print(f"3 FORN={int(address,16)}TO{int(address, 16)+length}:READA:POKEN,A:CK=CK+A:NEXT:READA", file=f)
-    print("4 PRINTTAB(3)\"Machine Code file has been saved\":PRINTTAB(8)\"This file can be killed\":PRINTTAB(5)\"Does not need Himem protection\"", file=f)
-    print(f"5 SAVEM\"{simName}.CO\",{int(address,16)},{int(address,16)+length},{int(address,16)} :DATA{decimalStr}", file=f)
+    length = len(code.data)
+    print("1 CLS:?\"Loading Machine Code File", file=f)
+    print(f"2 FORN={int(address,16)}TO{int(address, 16)+length}:READA:POKEN,A:NEXT", file=f)
+    print(f"3 ?\"Don't forget to run clear 256,{int(address,16)}", file=f)
+    if args.trs100_save:
+      print(f"4 SAVEM\"{simName}.CO\",{int(address,16)},{int(address,16)+length},{int(address,16)}", file=f)
+    if args.trs100_new:
+      print(f"5 NEW", file=f)
+
+    # Break code.data into 40 numbers each, so the line length doesn't get too long
+    n=40
+    # Taken from https://www.geeksforgeeks.org/break-list-chunks-size-n-python/
+    chunks = [code.data[i * n:(i + 1) * n] for i in range((len(code.data) + n - 1) // n )]
+
+    # BASIC line number
+    linenum = 6
+    for chunk in chunks:
+        # Convert each datum from hex to decimal.
+        decimal_string_list=[f"{int(datum[5],16)}" for datum in chunk]
+        linedata = ','.join(decimal_string_list)
+        print(f"{linenum} DATA {linedata}", file=f)
+        linenum += 1
+    # End with a zero
+    print(f"{linenum} DATA 0", file=f)
+    print(f"Size: {length} bytes")
 
     if f is not sys.stdout:
         f.close()
@@ -939,6 +953,8 @@ p.add_argument("-C", "--comment", help="include the comments in output", action=
 p.add_argument("-s", "--standard", help="equivalent to -A -B -I -H -C", action="store_true")
 p.add_argument("-b", "--bin", help="outputs only binary data", action="store_true")
 p.add_argument("-t", "--trs100", help="creates basic loader for TRS-80 Model 100", action="store_true")
+p.add_argument("-n", "--trs100_new", help="runs 'new' after poking Model 100 program into memory", action="store_true")
+p.add_argument("-S", "--trs100_save", help="in the Model 100 program, SAVEM the binary file", action="store_true")
 p.add_argument("-o", "--out", help="output file name (stdout, if not specified)")
 args = p.parse_args();
 
