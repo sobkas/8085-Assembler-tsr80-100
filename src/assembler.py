@@ -121,20 +121,20 @@ def output(code, name, args):
         width = 1
     
     if args.lineNum:
-        print('{:<20}'.format("Line number"),file=f,end='')
-        width += 20
+        print('{:<15}'.format("Line number"),file=f,end='')
+        width += 15
     if args.address:
-        print('{:<20}'.format("Address"),file=f,end='')
-        width += 20
-    if args.label:
-        print('{:<20}'.format("Label"),file=f,end='')
-        width += 20
-    if args.instruction:
-        print('{:<20}'.format("Instruction"),file=f,end='')
-        width += 20
+        print('{:<10}'.format("Address"),file=f,end='')
+        width += 10
     if args.hex:
-        print('{:<20}'.format("Hex Code"),file=f,end='')
-        width += 20
+        print('{:<10}'.format("Hex Code"),file=f,end='')
+        width += 10
+    if args.label:
+        print('{:<30}'.format("Label"),file=f,end='')
+        width += 30
+    if args.instruction:
+        print('{:<30}'.format("Instruction"),file=f,end='')
+        width += 30
     if args.comment:
         print('{:<20}'.format("Comment"),file=f,end='')
         width += 20
@@ -152,15 +152,15 @@ def output(code, name, args):
     if width:
         for l in code.data:
             if args.lineNum:
-                print('{:<20}'.format(l[1]),file=f,end='')
+                print('{:<15}'.format(l[1]),file=f,end='')
             if args.address:
-                print('{:<20}'.format(l[2]),file=f,end='')
-            if args.label:
-                print('{:<20}'.format(l[3]),file=f,end='')
-            if args.instruction:
-                print('{:<20}'.format(l[4]),file=f,end='')
+                print('{:<10}'.format(l[2]),file=f,end='')
             if args.hex:
-                print('{:<20}'.format(l[5]),file=f,end='')
+                print('{:<10}'.format(l[5]),file=f,end='')
+            if args.label:
+                print('{:<30}'.format(l[3]),file=f,end='')
+            if args.instruction:
+                print('{:<30}'.format(l[4]),file=f,end='')
             if args.bin:
                bin += binascii.unhexlify(l[5].split('x')[1])
             if args.comment:
