@@ -22,6 +22,8 @@ options:
   -s, --standard     equivalent to -A -B -I -H -C
   -b, --bin          outputs only binary data
   -t, --trs100       creates basic loader for TRS-80 Model 100
+  -n, --trs100_new   runs 'new' after poking Model 100 program into memory
+  -S, --trs100_save  in the Model 100 program, SAVEM the binary file
   -o OUT, --out OUT  output file name (stdout, if not specified)
   ```
 ## Source File Syntax
